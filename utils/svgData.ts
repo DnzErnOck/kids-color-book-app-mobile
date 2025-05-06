@@ -1,5 +1,5 @@
 // SVG şekilleri için örnek veriler
-export type ShapeKey = 'square' | 'circle' | 'triangle' | 'star' | 'cat' | 'dog' | 'flower' | 'tree' | 'house';
+export type ShapeKey = 'square' | 'circle' | 'triangle' | 'star' | 'cat' | 'dog' | 'flower' | 'tree' | 'house' | 'apple';
 
 export const svgShapes: Record<ShapeKey, string> = {
   // Basit şekiller
@@ -7,6 +7,10 @@ export const svgShapes: Record<ShapeKey, string> = {
   circle: `<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" stroke="black" stroke-width="2" fill="none"/></svg>`,
   triangle: `<svg viewBox="0 0 100 100"><polygon points="50,10 90,90 10,90" stroke="black" stroke-width="2" fill="none"/></svg>`,
   star: `<svg viewBox="0 0 100 100"><polygon points="50,10 61,35 90,35 65,55 75,80 50,65 25,80 35,55 10,35 39,35" stroke="black" stroke-width="2" fill="none"/></svg>`,
+  apple: `<svg viewBox="0 0 100 100">
+    <path d="M50,20 Q60,10 65,20 Q70,10 60,25 L60,25 Q75,25 80,40 Q85,60 70,80 Q60,90 50,80 Q40,90 30,80 Q15,60 20,40 Q25,25 40,25 L40,25 Q30,10 35,20 Q40,10 50,20 Z" stroke="black" stroke-width="2" fill="none"/>
+    <path d="M50,20 L50,35" stroke="black" stroke-width="2" fill="none"/>
+  </svg>`,
   
   // Hayvanlar
   cat: `<svg viewBox="0 0 100 100">
@@ -93,18 +97,31 @@ export const stickerData = {
   },
 };
 
-// Renk paleti
+// Renk paleti - çocuklar için daha canlı ve eğlenceli renkler
 export const colorPalette = [
   '#FF0000', // Kırmızı
+  '#FF4500', // Turuncu Kırmızı
   '#FF7F00', // Turuncu
+  '#FFD700', // Altın
   '#FFFF00', // Sarı
+  '#ADFF2F', // Yeşil Sarı
   '#00FF00', // Yeşil
+  '#00FFFF', // Açık Mavi
+  '#1E90FF', // Dodger Mavi
   '#0000FF', // Mavi
-  '#4B0082', // Indigo
+  '#8A2BE2', // Mavi Mor
   '#9400D3', // Mor
   '#FF1493', // Pembe
+  '#FF69B4', // Sıcak Pembe
+  '#FFC0CB', // Açık Pembe
   '#8B4513', // Kahverengi
+  '#A0522D', // Sienna
   '#000000', // Siyah
   '#FFFFFF', // Beyaz
-  '#808080', // Gri
+  '#FFA500', // Turuncu
+  '#32CD32', // Lime Yeşil
+  '#FF00FF', // Fuşya
+  '#00CED1', // Koyu Turkuaz
+  '#FF6347', // Domates
+  '#9370DB', // Orta Mor
 ];
