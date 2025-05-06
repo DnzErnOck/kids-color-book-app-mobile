@@ -1,6 +1,7 @@
 import ColoringCanvas, { ColoringCanvasRef } from '@/components/canvas/ColoringCanvas';
 import BrushPicker from '@/components/ui/BrushPicker';
 import ColorPicker from '@/components/ui/ColorPicker';
+import PatternPicker from '@/components/ui/PatternPicker';
 import StickerPicker from '@/components/ui/StickerPicker';
 import { BRUSH_TYPES } from '@/hooks/useBrush';
 import { ShapeKey, svgShapes } from '@/utils/svgData';
@@ -16,24 +17,26 @@ const TOOLBAR_BUTTONS = [
   { key: 'brush', icon: 'brush', color: '#FFD600' },
   { key: 'color', icon: 'palette', color: '#FF5252' },
   { key: 'sticker', icon: 'emoticon-happy', color: '#00C853' },
+  { key: 'pattern', icon: 'layers', color: '#8D6E63' },
   { key: 'undo', icon: 'undo', color: '#4FC3F7' },
   { key: 'clear', icon: 'trash-can', color: '#FF6B6B' },
   { key: 'save', icon: 'content-save', color: '#80DEEA' },
 ];
 
 export default function HomeScreen() {
-  const [modal, setModal] = useState<'brush' | 'color' | 'sticker' | null>(null);
+  const [modal, setModal] = useState<'brush' | 'color' | 'sticker' | 'pattern' | null>(null);
   const [selectedShape] = useState<ShapeKey>('apple');
   const [selectedColor, setSelectedColor] = useState('#FF5252');
   const [selectedBrush, setSelectedBrush] = useState('medium');
   const [brushSize, setBrushSize] = useState(8);
   const [brushType, setBrushType] = useState<typeof BRUSH_TYPES[keyof typeof BRUSH_TYPES]>(BRUSH_TYPES.NORMAL);
   const [selectedSticker, setSelectedSticker] = useState<string | null>(null);
+  const [selectedPattern, setSelectedPattern] = useState<string>('dots');
   const canvasRef = useRef<ColoringCanvasRef>(null);
 
   // Modal animasyonu için örnek state
   const modalAnim = useRef(new Animated.Value(0)).current;
-  const openModal = (type: 'brush' | 'color' | 'sticker') => {
+  const openModal = (type: 'brush' | 'color' | 'sticker' | 'pattern') => {
     setModal(type);
     Animated.timing(modalAnim, {
       toValue: 1,
@@ -52,18 +55,27 @@ export default function HomeScreen() {
 
   const handleStickerSelect = (stickerId: string) => {
     setSelectedSticker(stickerId);
+    // Clear any pattern when entering sticker mode
+    setSelectedPattern('');
+    canvasRef.current?.setPattern('');
     closeModal();
   };
 
   const handleColorSelect = (color: string) => {
+    console.log("HomeScreen: Color selected:", color);
     setSelectedColor(color);
     if (canvasRef.current) {
+      console.log("HomeScreen: Setting color on canvas:", color);
       canvasRef.current.setColor(color);
     }
     closeModal();
   };
 
   const handleBrushSelect = (brush: string) => {
+    // Exit sticker and pattern modes when brushing
+    setSelectedSticker(null);
+    setSelectedPattern('');
+    canvasRef.current?.setPattern('');
     setSelectedBrush(brush);
     switch (brush) {
       case 'thin':
@@ -94,7 +106,19 @@ export default function HomeScreen() {
         setBrushSize(20);
         setBrushType(BRUSH_TYPES.WATERCOLOR);
         break;
+      case 'roller':
+        setBrushSize(12);
+        setBrushType(BRUSH_TYPES.ROLLER);
+        break;
     }
+    closeModal();
+  };
+
+  // Handle pattern selection, exit sticker mode
+  const handlePatternSelect = (patternId: string) => {
+    setSelectedPattern(patternId);
+    setSelectedSticker(null);
+    canvasRef.current?.setPattern(patternId);
     closeModal();
   };
 
@@ -104,6 +128,7 @@ export default function HomeScreen() {
       case 'brush':
       case 'color':
       case 'sticker':
+      case 'pattern':
         openModal(action);
         break;
       case 'undo':
@@ -136,7 +161,7 @@ export default function HomeScreen() {
                 selectedShape={selectedShape}
                 brushType={brushType}
                 selectedSticker={selectedSticker}
-                onStickerPlaced={() => setSelectedSticker(null)}
+                pattern={selectedPattern}
               />
             </View>
           </View>
@@ -178,6 +203,12 @@ export default function HomeScreen() {
                 <StickerPicker
                   selectedSticker={selectedSticker}
                   onSelectSticker={handleStickerSelect}
+                />
+              )}
+              {modal === 'pattern' && (
+                <PatternPicker
+                  selectedPattern={selectedPattern}
+                  onSelectPattern={handlePatternSelect}
                 />
               )}
               <TouchableOpacity style={styles.closeModalBtn} onPress={closeModal}>

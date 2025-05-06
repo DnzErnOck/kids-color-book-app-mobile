@@ -20,6 +20,7 @@ const BRUSHES: Brush[] = [
   { id: 'crayon', name: 'Pastel', size: 8, icon: 'pencil', color: '#7C4DFF' },
   { id: 'marker', name: 'Fosforlu', size: 12, icon: 'marker', color: '#FFAB40' },
   { id: 'watercolor', name: 'Sulu Boya', size: 20, icon: 'water', color: '#80DEEA' },
+  { id: 'roller', name: 'Rulo', size: 12, icon: 'paint-roller', color: '#8D6E63' },
 ];
 
 interface BrushPickerProps {

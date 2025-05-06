@@ -1,3 +1,4 @@
+import { PATTERNS } from '@/components/ui/PatternPicker';
 import { BRUSH_TYPES, useBrush } from '@/hooks/useBrush';
 import { useCanvas } from '@/hooks/useCanvas';
 import { ShapeKey } from '@/utils/svgData';
@@ -12,7 +13,16 @@ interface PathData {
   strokeWidth: number;
   fill: string;
   brushType: string;
+  pattern?: string;
 }
+
+// Add pattern dash config
+const PATTERN_DASH: { [key: string]: number[] } = {
+  dots: [1, 4],
+  dashes: [6, 4],
+  dashdot: [6, 4, 1, 4],
+  long: [12, 6],
+};
 
 // ColoringCanvas için ref tipi tanımı
 export interface ColoringCanvasRef {
@@ -21,6 +31,7 @@ export interface ColoringCanvasRef {
   undo: () => void;
   redo: () => void;
   setColor: (color: string) => void;
+  setPattern: (pattern: string) => void;
 }
 
 interface ColoringCanvasProps {
@@ -32,6 +43,7 @@ interface ColoringCanvasProps {
   selectedSticker?: string | null;
   onStickerPlaced?: () => void;
   isContinuous?: boolean;
+  pattern?: string;
 }
 
 // Paths state'i için tip tanımı
@@ -59,13 +71,14 @@ const STICKERS = [
 
 const ColoringCanvas = forwardRef<ColoringCanvasRef, ColoringCanvasProps>(({ 
   svgData, 
-  initialColor = '#FFFFFF', 
+  initialColor = '#FF5252', 
   brushSize = 5, 
   selectedShape, 
   brushType = BRUSH_TYPES.NORMAL, 
   selectedSticker, 
   onStickerPlaced,
-  isContinuous = true 
+  isContinuous = true,
+  pattern,
 }: ColoringCanvasProps, ref) => {
   // Ekran boyutlarını al
   const { width, height } = Dimensions.get('window');
@@ -77,18 +90,23 @@ const ColoringCanvas = forwardRef<ColoringCanvasRef, ColoringCanvasProps>(({
   const [paths, setPaths] = useState<PathsState>({});
   const [currentPath, setCurrentPath] = useState<string>('');
   const [currentColor, setCurrentColor] = useState<string>(initialColor);
+  // update when prop changes
+  useEffect(() => { setCurrentColor(initialColor); }, [initialColor]);
   const [rainbowColorIndex, setRainbowColorIndex] = useState(0);
   const rainbowColors = ['#FF0000', '#FF7F00', '#FFFF00', '#00FF00', '#0000FF', '#4B0082', '#9400D3'];
   
-  const { startDrawing, continueDrawing, endDrawing, changeBrushSize, changeBrushType, brushType: currentBrushType } = useBrush();
+  const { startDrawing, continueDrawing, endDrawing, changeBrushSize, changeBrushType, changeColor, brushType: currentBrushType } = useBrush();
   const { loadSvgData, savePaths, fillPath, findPathAtPoint } = useCanvas();
   
   const [history, setHistory] = useState<PathsState[]>([]); // Geri al için geçmiş
   const [redoStack, setRedoStack] = useState<PathsState[]>([]); // İleri al için
   
-  const [stickers, setStickers] = useState<{ id: string; emoji: string; x: number; y: number }[]>([]);
+  const [stickers, setStickers] = useState<{ id: string; emoji: string; x: number; y: number; size?: number }[]>([]);
   
   const [canvasLayout, setCanvasLayout] = useState({ x: 0, y: 0 });
+  
+  const [currentPattern, setCurrentPattern] = useState<string | undefined>(pattern);
+  useEffect(() => { setCurrentPattern(pattern); }, [pattern]);
   
   useEffect(() => {
     if (svgData) {
@@ -193,10 +211,6 @@ const ColoringCanvas = forwardRef<ColoringCanvasRef, ColoringCanvasProps>(({
   }, [selectedShape, svgData]);
   
   useEffect(() => {
-    setCurrentColor(initialColor);
-  }, [initialColor]);
-  
-  useEffect(() => {
     changeBrushSize(brushSize);
   }, [brushSize, changeBrushSize]);
   
@@ -260,8 +274,12 @@ const ColoringCanvas = forwardRef<ColoringCanvasRef, ColoringCanvasProps>(({
     undo,
     redo,
     setColor: (color: string) => {
+      console.log('ColoringCanvas: setColor called with color', color);
       setCurrentColor(color);
-    }
+      drawingColorRef.current = color;
+      changeColor(color);
+    },
+    setPattern: (pat: string) => { setCurrentPattern(pat); }
   }));
   
   // SVG koordinat sistemine dönüştürme fonksiyonu - basitleştirildi ve düzeltildi
@@ -303,105 +321,101 @@ const ColoringCanvas = forwardRef<ColoringCanvasRef, ColoringCanvasProps>(({
     return distance / timeDiff; // piksel/ms cinsinden hız
   };
   
-  // Doğrudan renk değiştirme fonksiyonu
-  const handleColorChange = (color: string) => {
-    console.log("Renk değişti:", color); // Debug
-    setCurrentColor(color);
-  };
+  // Ensure panResponder uses latest color, size, type, and pattern via refs
+  const drawingColorRef = useRef(currentColor);
+  useEffect(() => { drawingColorRef.current = currentColor; }, [currentColor]);
+  const brushSizeRefForPan = useRef(brushSize);
+  useEffect(() => { brushSizeRefForPan.current = brushSize; }, [brushSize]);
+  const brushTypeRefForPan = useRef(brushType);
+  useEffect(() => { brushTypeRefForPan.current = brushType; }, [brushType]);
+  const patternRefForPan = useRef(currentPattern);
+  useEffect(() => { patternRefForPan.current = currentPattern; }, [currentPattern]);
   
-  // Renk değişimini izle
-  useEffect(() => {
-    console.log("initialColor değişti:", initialColor); // Debug
-    setCurrentColor(initialColor);
-  }, [initialColor]);
+  // Add ref for selectedSticker to support sticker mode
+  const selectedStickerRef = useRef<string | null>(selectedSticker);
+  useEffect(() => { selectedStickerRef.current = selectedSticker; }, [selectedSticker]);
   
-  // PanResponder oluştur
+  // Create PanResponder once, reading dynamic color from ref
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (evt) => {
+        console.log('ColoringCanvas: panGrant, selectedStickerRef.current=', selectedStickerRef.current);
         const { locationX, locationY } = evt.nativeEvent;
         const { x, y } = svgCoordinatesFromTouch(locationX, locationY);
-        console.log("Çizim başladı, renk:", currentColor); // Debug
-        const path = startDrawing(x, y, currentColor);
+        // Sticker mode: place a sticker
+        if (selectedStickerRef.current) {
+          console.log('ColoringCanvas: placing sticker', selectedStickerRef.current, 'at', x, y);
+          const stickerData = STICKERS.find(s => s.id === selectedStickerRef.current);
+          if (stickerData) {
+            setStickers(prev => [...prev, { id: `sticker-${Date.now()}`, emoji: stickerData.emoji, x, y, size: brushSizeRefForPan.current }]);
+          }
+          return;
+        }
+        // Pattern shape mode: stamp shapes
+        const patternId = patternRefForPan.current;
+        const patObj = PATTERNS.find(p => p.id === patternId);
+        if (patObj && patObj.type === 'shape') {
+          setStickers(prev => [...prev, { id: `pattern-${Date.now()}`, emoji: patObj.shape!, x, y, size: brushSizeRefForPan.current }]);
+          return;
+        }
+        // Default: start drawing a path
+        const colorToUse = brushType === BRUSH_TYPES.RAINBOW ? rainbowColors[rainbowColorIndex] : currentColor;
+        const path = startDrawing(x, y, colorToUse);
         setCurrentPath(path);
       },
       onPanResponderMove: (evt) => {
         const { locationX, locationY } = evt.nativeEvent;
         const { x, y } = svgCoordinatesFromTouch(locationX, locationY);
+        // Skip movement if sticker mode active
+        if (selectedStickerRef.current) return;
+        // Handle pattern shape continue stamping
+        const patternId = patternRefForPan.current;
+        const patObj = PATTERNS.find(p => p.id === patternId);
+        if (patObj && patObj.type === 'shape') {
+          setStickers(prev => [...prev, { id: `pattern-${Date.now()}`, emoji: patObj.shape!, x, y, size: brushSizeRefForPan.current }]);
+          return;
+        }
+        // Continue drawing
         const path = continueDrawing(x, y);
         setCurrentPath(path);
       },
       onPanResponderRelease: () => {
+        // Skip ending if sticker mode active
+        if (selectedStickerRef.current) return;
+        // Skip release for pattern shapes
+        const patternId = patternRefForPan.current;
+        const patObj = PATTERNS.find(p => p.id === patternId);
+        if (patObj && patObj.type === 'shape') return;
+        // End drawing and save path
         const path = endDrawing();
         if (path) {
           const newPathId = `path-${Date.now()}`;
-          // Path, renk, boyut ve tip bilgilerini sakla
-          const pathData = {
+          const strokeColor = brushType === BRUSH_TYPES.RAINBOW ? rainbowColors[rainbowColorIndex] : currentColor;
+          const pathData: PathData = {
             d: path,
-            stroke: currentColor,
-            strokeWidth: brushSize,
+            stroke: strokeColor,
+            strokeWidth: brushSizeRefForPan.current,
             fill: 'none',
-            brushType: brushType
+            brushType: brushTypeRefForPan.current,
+            pattern: patternRefForPan.current
           };
-          
-          console.log("Çizim bitti, kaydedilen renk:", pathData.stroke); // Debug
-          
-          setPaths(prev => ({
-            ...prev,
-            [newPathId]: pathData
-          }));
+          setPaths(prev => ({ ...prev, [newPathId]: pathData }));
           setCurrentPath('');
         }
-      },
+      }
     })
   ).current;
-  
-  // Sticker için ayrı bir dokunma yöneticisi
-  const stickerTapHandler = (event: any) => {
-    if (!selectedSticker) return;
-    
-    const { locationX, locationY } = event.nativeEvent;
-    console.log("Sticker için dokunma:", locationX, locationY); // Debug
-    
-    const sticker = STICKERS.find(s => s.id === selectedSticker);
-    if (sticker) {
-      console.log("Sticker bulundu:", sticker.emoji); // Debug
-      
-      setStickers(prev => [
-        ...prev,
-        {
-          id: `sticker-${Date.now()}`,
-          emoji: sticker.emoji,
-          x: locationX,
-          y: locationY
-        }
-      ]);
-      
-      if (onStickerPlaced) {
-        onStickerPlaced();
-      }
-    }
-  };
-  
-  // useEffect ile sticker ekleme logunu kaldır
-  useEffect(() => {
-    if (selectedSticker) {
-      console.log("Sticker seçildi, ekrana dokununca yerleştirilecek:", selectedSticker); // Debug
-    }
-  }, [selectedSticker]);
-  
+
   return (
-    <View 
-      style={[styles.canvasContainer, { position: 'relative' }]} 
-      {...(selectedSticker ? {} : panResponder.panHandlers)}
-      onTouchStart={selectedSticker ? stickerTapHandler : undefined}
-      onLayout={e => {
-        setCanvasLayout(e.nativeEvent.layout);
-      }}
+    <View
+      style={[styles.canvasContainer, { position: 'relative' }]}
+      {...panResponder.panHandlers}
+      onLayout={e => { setCanvasLayout(e.nativeEvent.layout); }}
     >
       <Svg 
+        pointerEvents="none"
         ref={svgRef} 
         width="100%" 
         height="100%" 
@@ -421,10 +435,11 @@ const ColoringCanvas = forwardRef<ColoringCanvasRef, ColoringCanvasProps>(({
         {/* Şu anda çizilen path'i render et */}
         {currentPath && (
           <G clipPath={clipPathData ? `url(#${clipPathId})` : undefined}>
-            <Path 
-              d={currentPath} 
-              fill="none" 
-              stroke={currentColor} 
+            <Path
+              d={currentPath}
+              fill="none"
+              stroke={brushType === BRUSH_TYPES.RAINBOW ? rainbowColors[rainbowColorIndex] : currentColor}
+              strokeDasharray={currentPattern ? PATTERN_DASH[currentPattern] : undefined}
               strokeWidth={brushType === BRUSH_TYPES.PENCIL ? brushSize * 1.5 : 
                           brushType === BRUSH_TYPES.CHALK ? brushSize * 1.2 :
                           brushType === BRUSH_TYPES.WATERCOLOR ? brushSize * 1.8 :
@@ -457,6 +472,8 @@ const ColoringCanvas = forwardRef<ColoringCanvasRef, ColoringCanvasProps>(({
               const pathBrushSize = parts.length > 2 ? parseFloat(parts[2]) : brushSize;
               // Fırça tipi bilgisi
               const pathBrushType = parts.length > 3 ? parts[3] : BRUSH_TYPES.NORMAL;
+              // Pattern bilgisi
+              const pathPattern = parts.length > 4 ? parts[4] : undefined;
               
               return (
                 <G key={id} clipPath={clipPathData ? `url(#${clipPathId})` : undefined}>
@@ -465,7 +482,14 @@ const ColoringCanvas = forwardRef<ColoringCanvasRef, ColoringCanvasProps>(({
                     fill="none" 
                     stroke={color} 
                     strokeWidth={pathBrushSize}
-                    strokeOpacity={0.8}
+                    strokeDasharray={pathPattern ? PATTERN_DASH[pathPattern] : undefined}
+                    strokeOpacity={
+                      pathBrushType === BRUSH_TYPES.PENCIL ? 0.6 : 
+                      pathBrushType === BRUSH_TYPES.CHALK ? 0.8 :
+                      pathBrushType === BRUSH_TYPES.WATERCOLOR ? 0.3 :
+                      pathBrushType === BRUSH_TYPES.CRAYON ? 0.7 :
+                      pathBrushType === BRUSH_TYPES.HIGHLIGHTER ? 0.4 : 1
+                    }
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
@@ -474,6 +498,8 @@ const ColoringCanvas = forwardRef<ColoringCanvasRef, ColoringCanvasProps>(({
             }
           } else {
             // Nesne tipindeki pathData'yı kullan
+            const pathPattern = pathData.pattern;
+            const pathBrushType = pathData.brushType || BRUSH_TYPES.NORMAL;
             return (
               <G key={id} clipPath={clipPathData ? `url(#${clipPathId})` : undefined}>
                 <Path 
@@ -481,7 +507,14 @@ const ColoringCanvas = forwardRef<ColoringCanvasRef, ColoringCanvasProps>(({
                   fill={pathData.fill || 'none'} 
                   stroke={pathData.stroke} 
                   strokeWidth={pathData.strokeWidth}
-                  strokeOpacity={0.8}
+                  strokeDasharray={pathPattern ? PATTERN_DASH[pathPattern] : undefined}
+                  strokeOpacity={
+                    pathBrushType === BRUSH_TYPES.PENCIL ? 0.6 : 
+                    pathBrushType === BRUSH_TYPES.CHALK ? 0.8 :
+                    pathBrushType === BRUSH_TYPES.WATERCOLOR ? 0.3 :
+                    pathBrushType === BRUSH_TYPES.CRAYON ? 0.7 :
+                    pathBrushType === BRUSH_TYPES.HIGHLIGHTER ? 0.4 : 1
+                  }
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
@@ -497,17 +530,17 @@ const ColoringCanvas = forwardRef<ColoringCanvasRef, ColoringCanvasProps>(({
           key={sticker.id}
           style={{
             position: 'absolute',
-            left: sticker.x - 18,
-            top: sticker.y - 18,
-            width: 36,
-            height: 36,
+            left: sticker.x - (sticker.size ?? 36) / 2,
+            top: sticker.y - (sticker.size ?? 36) / 2,
+            width: sticker.size ?? 36,
+            height: sticker.size ?? 36,
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 10,
           }}
           pointerEvents="none"
         >
-          <Text style={{ fontSize: 32 }}>{sticker.emoji}</Text>
+          <Text style={{ fontSize: (sticker.size ?? 36) * 0.9 }}>{sticker.emoji}</Text>
         </View>
       ))}
     </View>
