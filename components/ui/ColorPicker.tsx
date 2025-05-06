@@ -53,6 +53,7 @@ export default function ColorPicker({ selectedColor, onSelectColor }: ColorPicke
               ]}
               onPress={() => {
                 animateColorPress(index);
+                console.log("ColorPicker: Selected color:", color);
                 onSelectColor(color);
               }}
               activeOpacity={0.7}

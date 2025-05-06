@@ -8,6 +8,7 @@ const BRUSH_TYPES = {
   WATERCOLOR: 'watercolor',
   CRAYON: 'crayon',
   HIGHLIGHTER: 'highlighter',
+  ROLLER: 'roller',
 };
 
 export { BRUSH_TYPES };
@@ -25,7 +26,8 @@ export const useBrush = () => {
     isDrawingRef.current = true;
     lastPointRef.current = { x, y };
     lastTimeRef.current = Date.now();
-    currentColorRef.current = color;
+    console.log("useBrush startDrawing with color:", color);
+    currentColorRef.current = color || '#000000';
     currentPathRef.current = `M ${x} ${y}`;
     return currentPathRef.current;
   }, []);
@@ -127,6 +129,28 @@ export const useBrush = () => {
         }
         break;
 
+      case BRUSH_TYPES.ROLLER:
+        // Roller effect: apply repeating pattern offset along path
+        const rollerSteps = Math.max(2, Math.floor(distance * 2));
+        for (let i = 0; i <= rollerSteps; i++) {
+          const t = i / rollerSteps;
+          const cx = lastPoint.x + dx * t;
+          const cy = lastPoint.y + dy * t;
+          // Pattern: small dashes
+          const dashLength = brushSizeRef.current * 1;
+          const theta = Math.atan2(dy, dx);
+          const offsetX = Math.cos(theta) * dashLength;
+          const offsetY = Math.sin(theta) * dashLength;
+          if (i % 2 === 0) {
+            currentPathRef.current += ` L ${cx - offsetX/2} ${cy - offsetY/2}`;
+            currentPathRef.current += ` L ${cx + offsetX/2} ${cy + offsetY/2}`;
+          } else {
+            // skip segment for roller gap
+            currentPathRef.current += ` M ${cx + offsetX/2} ${cy + offsetY/2}`;
+          }
+        }
+        break;
+
       default:
         // Normal brush - straight line
         currentPathRef.current += ` L ${x} ${y}`;
@@ -152,12 +176,19 @@ export const useBrush = () => {
     brushTypeRef.current = type;
   }, []);
   
+  const changeColor = useCallback((color) => {
+    console.log("useBrush changeColor to:", color);
+    currentColorRef.current = color;
+  }, []);
+  
   return {
     startDrawing,
     continueDrawing,
     endDrawing,
     changeBrushSize,
     changeBrushType,
+    changeColor,
     brushType: brushTypeRef.current,
+    currentColor: currentColorRef.current
   };
 };
